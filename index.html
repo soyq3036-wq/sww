@@ -13,67 +13,100 @@
 <style>
 body {
   font-family:'Pretendard';
-  background:#0f172a;
-  color:white;
+  background:#f6f7fb;
+  color:#111827;
   padding:20px;
 }
 
-h2 { text-align:center; margin-bottom:10px; }
+h2 {
+  text-align:center;
+}
 
-.topbar { text-align:center; margin-bottom:20px; }
+.topbar {
+  max-width:760px;
+  margin:0 auto 20px;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:16px;
+  padding:12px;
+  display:flex;
+  justify-content:space-between;
+}
 
-.nickname { font-size:14px; color:#94a3b8; }
+.nickname {
+  color:#6b7280;
+  font-size:14px;
+}
 
 .section {
-  max-width:720px;
+  max-width:760px;
   margin:20px auto;
-  background:#1e293b;
+  background:#fff;
   border-radius:18px;
   padding:20px;
-  box-shadow:0 10px 30px rgba(0,0,0,0.4);
+  border:1px solid #eef2f7;
+  box-shadow:0 10px 25px rgba(0,0,0,0.05);
 }
 
-h3 { text-align:center; margin-bottom:15px; }
+h3 {
+  text-align:center;
+}
 
 .item {
   display:flex;
-  justify-content:center;
   align-items:center;
+  justify-content:center;
   gap:10px;
   margin-bottom:10px;
+  flex-wrap:wrap;
 }
 
 .label {
   width:120px;
   text-align:right;
-  color:#cbd5f5;
+  color:#6b7280;
 }
 
 input {
-  width:130px;
-  padding:6px;
-  border-radius:8px;
-  border:none;
+  width:120px;
+  padding:8px;
+  border-radius:10px;
+  border:1px solid #e5e7eb;
   text-align:center;
+  background:#f9fafb;
+}
+
+input:focus {
+  outline:none;
+  border-color:#60a5fa;
+  box-shadow:0 0 0 3px rgba(96,165,250,0.2);
+  background:#fff;
 }
 
 button {
-  padding:5px 10px;
+  padding:6px 10px;
   border:none;
-  border-radius:8px;
+  border-radius:10px;
   cursor:pointer;
 }
 
-.save { background:#22c55e; color:white; }
-.del { background:#475569; color:white; }
+.save { background:#3b82f6; color:white; }
+.del { background:#e5e7eb; color:#374151; }
+.del:hover { background:#ef4444; color:white; }
 
-.wait-normal { background:#1e40af; }
-.wait-soon { background:#f59e0b; }
-.wait-urgent { background:#ef4444; }
+/* 상태 */
+.wait-normal { background:#eef2ff; }
+.wait-soon { background:#fff7ed; }
+.wait-urgent { background:#fee2e2; }
 
 .wait-row {
-  padding:6px;
-  border-radius:10px;
+  padding:8px;
+  border-radius:12px;
+}
+
+.time-label {
+  font-size:11px;
+  color:#6b7280;
 }
 </style>
 </head>
@@ -83,7 +116,7 @@ button {
 <h2>패도혈 실시간자리</h2>
 
 <div class="topbar">
-  <div id="nick" class="nickname"></div>
+  <div id="nick"></div>
   <button onclick="changeName()">닉네임 변경</button>
 </div>
 
@@ -102,18 +135,9 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 /* ================= USER ================= */
-function getName(){
-  let name = localStorage.getItem("nickname");
+let myName = localStorage.getItem("nickname") || prompt("닉네임") || "익명";
+localStorage.setItem("nickname", myName);
 
-  if(!name || name.trim()===""){
-    name = prompt("닉네임 입력");
-    if(!name || name.trim()==="") return getName();
-    localStorage.setItem("nickname", name.trim());
-  }
-  return name;
-}
-
-let myName = getName();
 document.getElementById("nick").innerText = `👤 ${myName}`;
 
 function changeName(){
@@ -133,26 +157,22 @@ let waitList = [];
 
 /* ================= REALTIME ================= */
 db.ref("tracker").on("value", snap=>{
-  let val = snap.val();
-  if(!val){
-    val = {state:{}, waitList:[]};
-    db.ref("tracker").set(val);
-  }
+  const val = snap.val() || {state:{}, waitList:[]};
   state = val.state || {};
   waitList = val.waitList || [];
   render();
 });
 
 function save(){
-  db.ref("tracker").update({state, waitList});
+  db.ref("tracker").set({state, waitList});
 }
 
 /* ================= WAIT AUTO ================= */
 function updateWaitStatus(){
-  let changed = false;
   const now = new Date();
+  let changed = false;
 
-  waitList.forEach((w)=>{
+  waitList.forEach(w=>{
     if(!w.time) return;
 
     const [h,m] = w.time.split(":").map(Number);
@@ -172,7 +192,7 @@ function updateWaitStatus(){
   if(changed) save();
 }
 
-setInterval(updateWaitStatus, 30000);
+setInterval(updateWaitStatus,30000);
 
 /* ================= WAIT STYLE ================= */
 function getWaitClass(w){
@@ -181,13 +201,23 @@ function getWaitClass(w){
   return "wait-normal";
 }
 
+/* ================= EXPIRE CHECK ================= */
+function isExpired(endTime){
+  if(!endTime) return false;
+  const now = new Date();
+  const [h,m] = endTime.split(":").map(Number);
+  const t = new Date();
+  t.setHours(h,m,0,0);
+  return now > t;
+}
+
 /* ================= RENDER ================= */
 function render(){
   const app = document.getElementById("app");
   app.innerHTML = "";
 
   /* ================= MAIN ================= */
-  Object.entries(layout).forEach(([section, list])=>{
+  Object.entries(layout).forEach(([section,list])=>{
     const box = document.createElement("div");
     box.className="section";
 
@@ -206,36 +236,48 @@ function render(){
       const input = document.createElement("input");
       input.value = state[pos]?.name || "";
 
-      input.onkeydown = (e)=>{
-        if(e.key==="Enter"){
-          if(!input.value.trim()) return;
-          state[pos] = {name:input.value, user:myName};
-          save();
-        }
-      };
+      const time = document.createElement("input");
+      time.type="time";
+      time.value = state[pos]?.endTime || "";
+
+      const user = document.createElement("div");
+      user.className="time-label";
+      user.innerText = state[pos]?.user ? `(${state[pos].user})` : "";
+
+      const timeLabel = document.createElement("div");
+      timeLabel.className="time-label";
+
+      if(state[pos]?.endTime){
+        timeLabel.innerText = `⏰ ~ ${state[pos].endTime}`;
+      } else {
+        timeLabel.innerText = "⏰ 미설정";
+      }
+
+      if(state[pos]?.endTime && isExpired(state[pos].endTime)){
+        row.style.background = "#fee2e2";
+      }
 
       const saveBtn = document.createElement("button");
       saveBtn.className="save";
       saveBtn.innerText="저장";
       saveBtn.onclick=()=>{
-        state[pos] = {name:input.value, user:myName};
+        state[pos] = {
+          name:input.value,
+          endTime:time.value,
+          user:myName
+        };
         save();
       };
 
-      const del = document.createElement("button");
-      del.className="del";
-      del.innerText="삭제";
-      del.onclick=()=>{
+      const delBtn = document.createElement("button");
+      delBtn.className="del";
+      delBtn.innerText="삭제";
+      delBtn.onclick=()=>{
         delete state[pos];
         save();
       };
 
-      const user = document.createElement("div");
-      user.style.fontSize="11px";
-      user.style.color="#94a3b8";
-      user.innerText = state[pos]?.user ? `(${state[pos].user})` : "";
-
-      row.append(label,input,saveBtn,del,user);
+      row.append(label,input,time,saveBtn,delBtn,user,timeLabel);
       box.appendChild(row);
     });
 
@@ -252,28 +294,27 @@ function render(){
 
   waitList.forEach((w,i)=>{
     const row = document.createElement("div");
-    row.className="item wait-row " + getWaitClass(w);
+    row.className="item wait-row "+getWaitClass(w);
 
     const name = document.createElement("input");
-    name.value = w.name || "";
+    name.value = w.name||"";
 
     const time = document.createElement("input");
-    time.type = "time";
-    time.value = w.time || "";
+    time.type="time";
+    time.value = w.time||"";
 
     const status = document.createElement("div");
-    status.style.fontSize="11px";
-    status.style.color="#cbd5e1";
+    status.className="time-label";
     status.innerText = w.status==="ready" ? "🟢 대기중" : "🟡 대기";
 
     const saveBtn = document.createElement("button");
     saveBtn.className="save";
     saveBtn.innerText="저장";
     saveBtn.onclick=()=>{
-      waitList[i] = {
+      waitList[i]={
         name:name.value,
         time:time.value,
-        status:w.status || "wait",
+        status:w.status||"wait",
         user:myName
       };
       save();
@@ -281,9 +322,9 @@ function render(){
 
     const readyBtn = document.createElement("button");
     readyBtn.className="save";
-    readyBtn.innerText="🟢 즉시 대기중";
+    readyBtn.innerText="즉시 대기중";
     readyBtn.onclick=()=>{
-      waitList[i] = {
+      waitList[i]={
         name:name.value,
         time:"",
         status:"ready",
@@ -292,19 +333,18 @@ function render(){
       save();
     };
 
-    const del = document.createElement("button");
-    del.className="del";
-    del.innerText="삭제";
-    del.onclick=()=>{
+    const delBtn = document.createElement("button");
+    delBtn.className="del";
+    delBtn.innerText="삭제";
+    delBtn.onclick=()=>{
       waitList.splice(i,1);
       save();
     };
 
-    row.append(name,time,saveBtn,readyBtn,del,status);
+    row.append(name,time,saveBtn,readyBtn,delBtn,status);
     waitBox.appendChild(row);
   });
 
-  /* ================= ADD ================= */
   const addBtn = document.createElement("button");
   addBtn.className="save";
   addBtn.innerText="대기 추가";
