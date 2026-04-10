@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>패도혈 실시간자리</title>
+<title>패도혈 예약 시스템</title>
 
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
 
@@ -19,17 +19,6 @@ body{
 }
 
 h2{text-align:center;}
-
-.topbar{
-  max-width:800px;
-  margin:0 auto 20px;
-  background:#fff;
-  border:1px solid #e5e7eb;
-  border-radius:14px;
-  padding:10px 14px;
-  display:flex;
-  justify-content:space-between;
-}
 
 .section{
   max-width:800px;
@@ -58,7 +47,7 @@ h3{text-align:center;}
   font-size:13px;
 }
 
-input, select{
+input,select{
   padding:6px;
   border-radius:10px;
   border:1px solid #e5e7eb;
@@ -78,7 +67,6 @@ button{
 .del:hover{background:#ef4444;color:white;}
 
 .wait-row{padding:8px;border-radius:10px;}
-.wait-normal{background:#eef2ff;}
 .wait-soon{background:#fff7ed;}
 .wait-urgent{background:#fee2e2;}
 
@@ -90,248 +78,256 @@ button{
 
 <h2>패도혈 예약 시스템</h2>
 
-<div class="topbar">
-  <div id="nick"></div>
-  <button onclick="changeName()">닉네임 변경</button>
-</div>
-
 <div id="app"></div>
 
 <script>
 /* ================= FIREBASE ================= */
-const firebaseConfig={
-  apiKey:"AIzaSyAVBh5btDorOSdGOeV8h_eYYVjwokrdHOk",
-  authDomain:"array-ff467.firebaseapp.com",
-  databaseURL:"https://array-ff467-default-rtdb.firebaseio.com/",
-  projectId:"array-ff467"
+const firebaseConfig = {
+  apiKey: "AIzaSyAVBh5btDorOSdGOeV8h_eYYVjwokrdHOk",
+  authDomain: "array-ff467.firebaseapp.com",
+  databaseURL: "https://array-ff467-default-rtdb.firebaseio.com/",
+  projectId: "array-ff467"
 };
 
 firebase.initializeApp(firebaseConfig);
-const db=firebase.database();
+const db = firebase.database();
 
 /* ================= USER ================= */
-let myName=localStorage.getItem("nickname")||prompt("닉네임")||"익명";
-localStorage.setItem("nickname",myName);
-document.getElementById("nick").innerText="👤 "+myName;
+let myName = localStorage.getItem("nickname") || prompt("닉네임") || "익명";
+localStorage.setItem("nickname", myName);
 
-function changeName(){
-  localStorage.removeItem("nickname");
-  location.reload();
-}
-
-/* ================= DATA ================= */
-const layout={
-  "강남자리":["11시 방","11시 외각","1시 방","1시 외각"],
-  "메인":["5시 방","6시 방","6시 외각"],
-  "서브":["9시 방","9시 외각","3시 방","중앙법진"]
+/* ================= STRUCTURE ================= */
+const layout = {
+  "강남자리": ["11시 방","11시 외각","1시 방","1시 외각"],
+  "메인": ["5시 방","6시 방","6시 외각"],
+  "서브": ["9시 방","9시 외각","3시 방","중앙법진"]
 };
 
-let state={};
-let waitList=[];
+let state = {};
+let waitList = [];
 
 /* ================= REALTIME ================= */
-db.ref("tracker").on("value",snap=>{
-  const v=snap.val()||{state:{},waitList:[]};
-  state=v.state||{};
-  waitList=v.waitList||[];
+db.ref("tracker").on("value", snap => {
+  const v = snap.val() || { state:{}, waitList:[] };
+  state = v.state || {};
+  waitList = v.waitList || [];
   render();
 });
 
-function save(){
-  db.ref("tracker").set({state,waitList});
-}
-
-/* ================= AUTO ================= */
-function updateWait(){
-  const now=new Date();
-  let changed=false;
-
-  waitList.forEach(w=>{
-    if(!w.time) return;
-
-    const [h,m]=w.time.split(":").map(Number);
-    const t=new Date();
-    t.setHours(h,m,0,0);
-
-    if(now>=t){
-      if(w.status!=="ready"){
-        w.status="ready";
-        changed=true;
-      }
-    }
-  });
-
-  if(changed)save();
-}
-setInterval(updateWait,30000);
-
-/* ================= HELPERS ================= */
-function isExpired(t){
-  if(!t) return false;
-  const now=new Date();
-  const [h,m]=t.split(":").map(Number);
-  const d=new Date();
-  d.setHours(h,m,0,0);
-  return now>d;
-}
-
-function getClass(w){
-  if(w.status==="ready")return"wait-urgent";
-  if(w.status==="wait")return"wait-soon";
-  return"wait-normal";
+function saveAll(){
+  db.ref("tracker").set({ state, waitList });
 }
 
 /* ================= TARGET LIST ================= */
 function getAllTargets(){
-  return Object.entries(layout).flatMap(([s,list])=>
-    list.map(p=>`${s} - ${p}`)
+  return Object.entries(layout).flatMap(([s,list]) =>
+    list.map(p => `${s} - ${p}`)
   );
 }
 
 /* ================= RENDER ================= */
 function render(){
-  const app=document.getElementById("app");
-  app.innerHTML="";
+  const app = document.getElementById("app");
+  app.innerHTML = "";
 
-  /* ====== 자리 ====== */
-  Object.entries(layout).forEach(([sec,list])=>{
-    const box=document.createElement("div");
-    box.className="section";
+  /* ================= 자리 ================= */
+  Object.entries(layout).forEach(([sec,list]) => {
+    const box = document.createElement("div");
+    box.className = "section";
 
-    const h=document.createElement("h3");
-    h.innerText=sec;
+    const h = document.createElement("h3");
+    h.innerText = sec;
     box.appendChild(h);
 
-    list.forEach(pos=>{
-      const row=document.createElement("div");
-      row.className="item";
+    list.forEach(pos => {
+      const row = document.createElement("div");
+      row.className = "item";
 
-      const label=document.createElement("div");
-      label.className="label";
-      label.innerText=pos;
+      const label = document.createElement("div");
+      label.className = "label";
+      label.innerText = pos;
 
-      const name=document.createElement("input");
-      name.value=state[pos]?.name||"";
+      const name = document.createElement("input");
+      name.value = state[pos]?.name || "";
 
-      const end=document.createElement("input");
-      end.type="time";
-      end.value=state[pos]?.endTime||"";
-
-      const btn=document.createElement("button");
-      btn.className="save";
-      btn.innerText="저장";
-      btn.onclick=()=>{
-        state[pos]={name:name.value,endTime:end.value,user:myName};
-        save();
+      const save = document.createElement("button");
+      save.className = "save";
+      save.innerText = "저장";
+      save.onclick = () => {
+        state[pos] = {
+          name: name.value,
+          user: myName
+        };
+        saveAll();
       };
 
-      const del=document.createElement("button");
-      del.className="del";
-      del.innerText="삭제";
-      del.onclick=()=>{
+      const del = document.createElement("button");
+      del.className = "del";
+      del.innerText = "삭제";
+      del.onclick = () => {
         delete state[pos];
-        save();
+        saveAll();
       };
 
-      const info=document.createElement("div");
-      info.className="time-label";
-      info.innerText=state[pos]?.endTime?`⏰ ${state[pos].endTime}`:"⏰ 없음";
-
-      if(state[pos]?.endTime&&isExpired(state[pos].endTime)){
-        row.style.background="#fee2e2";
-      }
-
-      row.append(label,name,end,btn,del,info);
+      row.append(label, name, save, del);
       box.appendChild(row);
     });
 
     app.appendChild(box);
   });
 
-  /* ====== 대기 ====== */
-  const waitBox=document.createElement("div");
-  waitBox.className="section";
+  /* ================= 대기 ================= */
+  const waitBox = document.createElement("div");
+  waitBox.className = "section";
 
-  const h=document.createElement("h3");
-  h.innerText="대기";
-  waitBox.appendChild(h);
+  const title = document.createElement("h3");
+  title.innerText = "대기";
+  waitBox.appendChild(title);
 
-  const targets=getAllTargets();
+  const targets = getAllTargets();
 
-  waitList.forEach((w,i)=>{
-    const row=document.createElement("div");
-    row.className="item wait-row "+getClass(w);
+  waitList.forEach((w,i) => {
+    const row = document.createElement("div");
+    row.className = "item wait-row";
 
-    const name=document.createElement("input");
-    name.value=w.name||"";
+    /* 이름 */
+    const name = document.createElement("input");
+    name.value = w.name || "";
 
-    const time=document.createElement("input");
-    time.type="time";
-    time.value=w.time||"";
+    /* AM / PM */
+    const period = document.createElement("select");
+    ["AM","PM"].forEach(p => {
+      const o = document.createElement("option");
+      o.value = p;
+      o.innerText = p;
+      if (w.time?.period === p) o.selected = true;
+      period.appendChild(o);
+    });
 
-    const select=document.createElement("select");
-    targets.forEach(t=>{
-      const o=document.createElement("option");
-      o.value=t;
-      o.innerText=t;
-      if(w.target===t)o.selected=true;
+    /* hour */
+    const hour = document.createElement("select");
+    for (let h=1; h<=12; h++){
+      const o = document.createElement("option");
+      o.value = String(h).padStart(2,"0");
+      o.innerText = h;
+      if (w.time?.hour === o.value) o.selected = true;
+      hour.appendChild(o);
+    }
+
+    /* minute */
+    const minute = document.createElement("select");
+    for (let m=0; m<60; m+=5){
+      const o = document.createElement("option");
+      o.value = String(m).padStart(2,"0");
+      o.innerText = o.value;
+      if (w.time?.minute === o.value) o.selected = true;
+      minute.appendChild(o);
+    }
+
+    /* ================= TARGET (자리무관 포함) ================= */
+    const select = document.createElement("select");
+
+    const any = document.createElement("option");
+    any.value = "ANY";
+    any.innerText = "🎯 자리무관";
+    if (w.target === "ANY") any.selected = true;
+    select.appendChild(any);
+
+    targets.forEach(t => {
+      const o = document.createElement("option");
+      o.value = t;
+      o.innerText = t;
+      if (w.target === t) o.selected = true;
       select.appendChild(o);
     });
 
-    const status=document.createElement("div");
-    status.className="time-label";
-    status.innerText=w.status==="ready"
-      ?"🟢 대기중"
-      :`🟡 대기 (${w.target||"없음"})`;
+    /* 상태 */
+    const status = document.createElement("div");
+    status.className = "time-label";
+    status.innerText =
+      w.status === "ready"
+        ? "🟢 대기중"
+        : `🟡 대기 (${w.target || "미선택"})`;
 
-    const save=document.createElement("button");
-    save.className="save";
-    save.innerText="저장";
-    save.onclick=()=>{
-      waitList[i]={name:name.value,time:time.value,target:select.value,status:w.status||"wait",user:myName};
+    /* 저장 */
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "save";
+    saveBtn.innerText = "저장";
+    saveBtn.onclick = () => {
+      waitList[i] = {
+        name: name.value,
+        time: {
+          period: period.value,
+          hour: hour.value,
+          minute: minute.value
+        },
+        target: select.value,
+        status: w.status || "wait",
+        user: myName
+      };
       saveAll();
     };
 
-    const fast=document.createElement("button");
-    fast.className="save";
-    fast.innerText="즉시 대기중";
-    fast.onclick=()=>{
-      waitList[i]={name:name.value,time:"",target:select.value,status:"ready",user:myName};
+    /* 즉시 */
+    const fastBtn = document.createElement("button");
+    fastBtn.className = "save";
+    fastBtn.innerText = "즉시";
+    fastBtn.onclick = () => {
+      waitList[i] = {
+        name: name.value,
+        time: null,
+        target: select.value,
+        status: "ready",
+        user: myName
+      };
       saveAll();
     };
 
-    const del=document.createElement("button");
-    del.className="del";
-    del.innerText="삭제";
-    del.onclick=()=>{
+    /* 삭제 */
+    const delBtn = document.createElement("button");
+    delBtn.className = "del";
+    delBtn.innerText = "삭제";
+    delBtn.onclick = () => {
       waitList.splice(i,1);
       saveAll();
     };
 
-    row.append(name,time,select,save,fast,del,status);
+    row.append(
+      name,
+      period,
+      hour,
+      minute,
+      select,
+      saveBtn,
+      fastBtn,
+      delBtn,
+      status
+    );
+
     waitBox.appendChild(row);
   });
 
-  const add=document.createElement("button");
-  add.className="save";
-  add.innerText="대기 추가";
-  add.onclick=()=>{
+  /* ================= ADD ================= */
+  const add = document.createElement("button");
+  add.className = "save";
+  add.innerText = "대기 추가";
+  add.onclick = () => {
     waitList.push({
-      name:"새 인원",
-      time:"",
-      target:targets[0]||"",
-      status:"ready",
-      user:myName
+      name: "새 인원",
+      time: {
+        period: "AM",
+        hour: "12",
+        minute: "00"
+      },
+      target: "ANY",
+      status: "ready",
+      user: myName
     });
     saveAll();
   };
 
   waitBox.appendChild(add);
   app.appendChild(waitBox);
-}
-
-function saveAll(){
-  db.ref("tracker").set({state,waitList});
 }
 </script>
 
