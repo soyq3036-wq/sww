@@ -15,10 +15,7 @@ body{
   font-family:Pretendard;
   background:#f6f7fb;
   padding:20px;
-  color:#111827;
 }
-
-h2{text-align:center;}
 
 .section{
   max-width:800px;
@@ -26,10 +23,7 @@ h2{text-align:center;}
   background:#fff;
   padding:20px;
   border-radius:16px;
-  border:1px solid #e5e7eb;
 }
-
-h3{text-align:center;}
 
 .item{
   display:flex;
@@ -39,43 +33,36 @@ h3{text-align:center;}
   margin-bottom:10px;
 }
 
-.label{
-  width:140px;
-  text-align:right;
-  color:#6b7280;
-}
+.label{width:140px;text-align:right;color:#666;}
 
-input{
+input,select{
   padding:6px;
-  border-radius:10px;
-  border:1px solid #e5e7eb;
-  background:#f9fafb;
-  text-align:center;
+  border-radius:8px;
+  border:1px solid #ddd;
 }
 
 button{
   padding:6px 10px;
   border:none;
-  border-radius:10px;
+  border-radius:8px;
   cursor:pointer;
 }
 
 .save{background:#3b82f6;color:white;}
-.del{background:#e5e7eb;}
-.del:hover{background:#ef4444;color:white;}
+.del{background:#ddd;}
 </style>
 </head>
 
 <body>
 
-<h2>패도혈 예약 시스템</h2>
+<h2 style="text-align:center;">패도혈 예약 시스템</h2>
 <div id="app"></div>
 
 <script>
 
-/* ================= FIREBASE ================= */
+/* Firebase */
 const firebaseConfig = {
-  apiKey:"AIzaSyAVBh5btDorOSdGOeV8h_eYYVjwokrdHOk",
+  apiKey:"AIzaSy...",
   authDomain:"array-ff467.firebaseapp.com",
   databaseURL:"https://array-ff467-default-rtdb.firebaseio.com/",
   projectId:"array-ff467"
@@ -84,63 +71,64 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-/* ================= 닉네임 ================= */
+/* 닉네임 */
 let myName = localStorage.getItem("nickname");
-
 if(!myName){
   myName = prompt("닉네임 입력") || "익명";
   localStorage.setItem("nickname", myName);
 }
 
-/* ================= 자리 구조 ================= */
+/* 자리 구조 */
 const layout = {
-  "강남": [
-    "1시 외각","1시 방","11시 외각","12시 방","9시 외각"
-  ],
-  "메인": [
-    "11시 방","5시 방","3시 외각","3시 방"
-  ],
-  "서브": [
-    "5시 외각","중앙법진","6시 외각","9시 방","6시 방"
-  ]
+  "강남":["1시 외각","1시 방","11시 외각","12시 방","9시 외각"],
+  "메인":["11시 방","5시 방","3시 외각","3시 방"],
+  "서브":["5시 외각","중앙법진","6시 외각","9시 방","6시 방"]
 };
 
 let state = {};
+let waitList = [];
 
-/* ================= 🔥 초기값 세팅 ================= */
+/* 초기값 */
 db.ref("tracker").once("value").then(snap=>{
   if(!snap.exists()){
     db.ref("tracker").set({
-      state:{
-        "1시 방": {name:"현대주방"}
-      }
+      state:{ "1시 방": {name:"현대주방"} },
+      waitList:[]
     });
   }
 });
 
-/* ================= 실시간 ================= */
+/* 실시간 */
 db.ref("tracker").on("value", snap=>{
-  const v = snap.val() || {state:{}};
+  const v = snap.val() || {};
   state = v.state || {};
+  waitList = v.waitList || [];
   render();
 });
 
-/* ================= 저장 ================= */
 function save(){
-  db.ref("tracker").set({state});
+  db.ref("tracker").set({state,waitList});
 }
 
-/* ================= 렌더 ================= */
+/* 전체 자리 목록 */
+function getTargets(){
+  return Object.entries(layout).flatMap(([s,list]) =>
+    list.map(p=>`${s}-${p}`)
+  );
+}
+
+/* 렌더 */
 function render(){
   const app = document.getElementById("app");
-  app.innerHTML = "";
+  app.innerHTML="";
 
+  /* ===== 자리 ===== */
   Object.entries(layout).forEach(([sec,list])=>{
     const box = document.createElement("div");
     box.className="section";
 
     const title = document.createElement("h3");
-    title.innerText = sec;
+    title.innerText=sec;
     box.appendChild(title);
 
     list.forEach(pos=>{
@@ -149,7 +137,7 @@ function render(){
 
       const label = document.createElement("div");
       label.className="label";
-      label.innerText = pos;
+      label.innerText=pos;
 
       const input = document.createElement("input");
       input.value = state[pos]?.name || "";
@@ -158,10 +146,7 @@ function render(){
       saveBtn.className="save";
       saveBtn.innerText="저장";
       saveBtn.onclick=()=>{
-        state[pos] = {
-          name: input.value,
-          user: myName
-        };
+        state[pos]={name:input.value,user:myName};
         save();
       };
 
@@ -179,6 +164,69 @@ function render(){
 
     app.appendChild(box);
   });
+
+  /* ===== 대기 ===== */
+  const waitBox = document.createElement("div");
+  waitBox.className="section";
+
+  const title = document.createElement("h3");
+  title.innerText="대기";
+  waitBox.appendChild(title);
+
+  const targets = getTargets();
+
+  waitList.forEach((w,i)=>{
+    const row = document.createElement("div");
+    row.className="item";
+
+    const name = document.createElement("input");
+    name.value = w.name || "";
+
+    const select = document.createElement("select");
+
+    const any = document.createElement("option");
+    any.value="ANY";
+    any.innerText="자리무관";
+    select.appendChild(any);
+
+    targets.forEach(t=>{
+      const o=document.createElement("option");
+      o.value=t;
+      o.innerText=t;
+      if(w.target===t) o.selected=true;
+      select.appendChild(o);
+    });
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className="save";
+    saveBtn.innerText="저장";
+    saveBtn.onclick=()=>{
+      waitList[i]={name:name.value,target:select.value};
+      save();
+    };
+
+    const del = document.createElement("button");
+    del.className="del";
+    del.innerText="삭제";
+    del.onclick=()=>{
+      waitList.splice(i,1);
+      save();
+    };
+
+    row.append(name,select,saveBtn,del);
+    waitBox.appendChild(row);
+  });
+
+  const add = document.createElement("button");
+  add.className="save";
+  add.innerText="대기 추가";
+  add.onclick=()=>{
+    waitList.push({name:"",target:"ANY"});
+    save();
+  };
+
+  waitBox.appendChild(add);
+  app.appendChild(waitBox);
 }
 
 </script>
